@@ -1,0 +1,75 @@
+#!/bin/bash
+OPTIONS="hw:c:u:"
+LONGOPT="help,warning:,critical:,user:"
+R_GOOD=0
+R_WARN=1
+R_CRIT=2
+R_UNKN=3
+N_WARN=5
+N_CRIT=10
+M_USER=""
+OPTTEMP=$(getopt -o ${OPTIONS} --long ${LONGOPT} -n 'monitor_users' -- "$@")
+if [ $? != 0 ]
+then
+	echo "Terminating..." >&2
+	echo "monitor_users:Invalid Parameters"
+	exit $R_UNKN
+fi
+eval set -- "$OPTTEMP"
+while true
+do
+	case "$1" in
+		-h|--help)
+			echo "monitor_users [-w|--warning w] [-c|--critical c] [-u|--user u]"
+			echo "	Defaults to critical limit at 10, warning at 5, counting all users"
+			echo "	-w|--warning sets warning limit"
+			echo "	-c|--critical sets critical limit"
+			echo "	-u|--user counts only logins for that user"
+			echo "	-h|--help displays this help"
+			echo "	Return values are as specified by the nagios plugin API"
+			echo "	https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/3/en/pluginapi.html"
+			exit $R_UNKN
+			;;
+		-w|--warning)
+			N_WARN="$2"
+			shift 2
+			;;
+		-c|--critical)
+			N_CRIT="$2"
+			shift 2
+			;;
+		-u|--user)
+			M_USER="$2"
+			shift 2
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			shift
+			;;
+	esac
+done
+UCOUNT=$(w -h ${M_USER} | wc -l)
+
+if [ ${UCOUNT} -ge $N_CRIT ]
+then
+	R_CODE=$R_CRIT
+	R_TEXT="CRIT"
+elif [ ${UCOUNT} -ge $N_WARN ]
+then
+	R_CODE=$R_WARN
+	R_TEXT="WARN"
+else
+	R_CODE=$R_GOOD
+	R_TEXT="OK"
+fi
+R_DATA="${M_USER};${UCOUNT};${N_WARN};${N_CRIT};${R_CODE}"
+if [ -z "${M_USER}" ]
+then
+	echo "USERS ${R_TEXT}: ${UCOUNT} currently logged in.|${R_DATA}"
+else
+	echo "USER ${M_USER} ${R_TEXT}: ${UCOUNT} currently logged in.|${R_DATA}"
+fi
+exit $R_CODE
